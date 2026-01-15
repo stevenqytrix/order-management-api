@@ -1,52 +1,28 @@
 from typing import Optional
+from uuid import UUID
 
-from application.ports.order_repository import OrderRepository
-from domain.order import Order
+from src.application.ports.order_repository import OrderRepository
+from src.domain.order import Order
+from src.infrastructure.persistence.models.order_model import OrderModel
 
 
 class PostgresOrderRepository(OrderRepository):
-    """
-    PostgreSQL implementation of the OrderRepository.
-    Responsible only for persistence concerns.
-    """
-
-    def __init__(self, connection):
-        """
-        connection: DB connection or session (psycopg / SQLAlchemy / asyncpg)
-        """
-        self._connection = connection
+    def __init__(self, session):
+        self._session = session
 
     def save(self, order: Order) -> None:
-        query = """
-        INSERT INTO orders (id, customer_id, status, total_amount, created_at)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (id)
-        DO UPDATE SET
-            status = EXCLUDED.status,
-            total_amount = EXCLUDED.total_amount
-        """
-        self._connection.execute(
-            query,
-            (
-                order.id,
-                order.customer_id,
-                order.status.value,
-                order.total_amount,
-                order.created_at,
-            ),
+        model = OrderModel.from_domain(order)
+        self._session.add(model)
+        self._session.commit()
+
+    def get_by_id(self, order_id: UUID) -> Optional[Order]:
+        model: OrderModel | None = (
+            self._session.query(OrderModel)
+            .filter_by(id=order_id)
+            .one_or_none()
         )
 
-    def get_by_id(self, order_id: str) -> Optional[Order]:
-        query = "SELECT * FROM orders WHERE id = %s"
-        row = self._connection.fetch_one(query, (order_id,))
-
-        if row is None:
+        if model is None:
             return None
 
-        return Order(
-            id=row["id"],
-            customer_id=row["customer_id"],
-            status=row["status"],
-            total_amount=row["total_amount"],
-            created_at=row["created_at"],
-        )
+        return model.to_domain()
