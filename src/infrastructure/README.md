@@ -26,9 +26,10 @@ Typical responsibilities of this layer include:
 
 ## Architectural Rules
 
-- Implements repository interfaces defined in application layer
+- Implements repository interfaces defined in the application layer
 - No business rules allowed
 - No domain logic allowed
+- No transaction boundaries defined here (handled by Unit of Work)
 - Frameworks are isolated here
 - Can be replaced without impacting domain or application layers
 
