@@ -1,54 +1,64 @@
-from typing import List, Protocol
+from typing import Sequence
 
-from src.domain.order import Order, OrderItem
-
-
-class OrderRepository(Protocol):
-    def save(self, order: Order) -> None:
-        ...
-
-    def get_by_id(self, order_id: str) -> Order:
-        ...
+from domain.order import Order, OrderItem, OrderId
+from application.ports.order_repository import OrderRepository
+from application.errors import OrderNotFound
 
 
-class CreateOrderUseCase:
+class _BaseOrderUseCase:
+    """
+    Base class for Order-related use cases.
+
+    Centralizes application-level policies:
+    - Order must exist
+    - Not-found handling is consistent
+    """
+
     def __init__(self, repository: OrderRepository):
-        self.repository = repository
+        self._repository = repository
 
-    def execute(self, customer_id: str, items: List[OrderItem]) -> Order:
+    def _get_order_or_fail(self, order_id: OrderId) -> Order:
+        order = self._repository.get_by_id(order_id)
+        if order is None:
+            raise OrderNotFound(order_id)
+        return order
+
+
+class CreateOrder(_BaseOrderUseCase):
+    """Creates a new Order aggregate."""
+
+    def __call__(self, *, customer_id: str, items: Sequence[OrderItem]) -> Order:
         order = Order.create(customer_id=customer_id, items=items)
-        self.repository.save(order)
+        self._repository.save(order)
         return order
 
 
-class PayOrderUseCase:
-    def __init__(self, repository: OrderRepository):
-        self.repository = repository
+class PayOrder(_BaseOrderUseCase):
+    """Marks an existing Order as paid."""
 
-    def execute(self, order_id: str) -> Order:
-        order = self.repository.get_by_id(order_id)
+    def __call__(self, *, order_id: OrderId) -> Order:
+        order = self._get_order_or_fail(order_id)
         order.pay()
-        self.repository.save(order)
+        self._repository.save(order)
         return order
 
 
-class ShipOrderUseCase:
-    def __init__(self, repository: OrderRepository):
-        self.repository = repository
+class ShipOrder(_BaseOrderUseCase):
+    """Ships an already paid Order."""
 
-    def execute(self, order_id: str) -> Order:
-        order = self.repository.get_by_id(order_id)
+    def __call__(self, *, order_id: OrderId) -> Order:
+        order = self._get_order_or_fail(order_id)
         order.ship()
-        self.repository.save(order)
+        self._repository.save(order)
         return order
 
 
-class CancelOrderUseCase:
-    def __init__(self, repository: OrderRepository):
-        self.repository = repository
+class CancelOrder(_BaseOrderUseCase):
+    """Cancels an Order if cancellation is allowed."""
 
-    def execute(self, order_id: str) -> Order:
-        order = self.repository.get_by_id(order_id)
+    def __call__(self, *, order_id: OrderId) -> Order:
+        order = self._get_order_or_fail(order_id)
         order.cancel()
-        self.repository.save(order)
+        self._repository.save(order)
         return order
+
