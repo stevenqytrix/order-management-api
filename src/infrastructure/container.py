@@ -1,33 +1,75 @@
+from contextlib import AbstractContextManager
+from typing import Callable
+
 from application.use_cases import (
-    CreateOrderUseCase,
-    PayOrderUseCase,
-    ShipOrderUseCase,
-    CancelOrderUseCase,
-    GetOrderUseCase,
+    CreateOrder,
+    PayOrder,
+    ShipOrder,
+    CancelOrder,
 )
+from application.ports.order_repository import OrderRepository
 from infrastructure.persistence.postgres_order_repository import PostgresOrderRepository
 
 
-def build_order_repository():
-    # placeholder: connection/session verrà iniettata dopo
-    return PostgresOrderRepository()
+# =========
+# Unit of Work
+# =========
+
+class UnitOfWork(AbstractContextManager):
+    """
+    Unit of Work implementation.
+
+    Responsibilities:
+    - Open / close persistence session
+    - Control transaction boundaries
+    - Expose repositories
+    """
+
+    def __init__(self, session_factory: Callable):
+        self._session_factory = session_factory
+        self.session = None
+        self.orders: OrderRepository | None = None
+
+    def __enter__(self):
+        self.session = self._session_factory()
+        self.orders = PostgresOrderRepository(self.session)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type:
+            self.session.rollback()
+        else:
+            self.session.commit()
+        self.session.close()
 
 
-def build_create_order_use_case():
-    return CreateOrderUseCase(build_order_repository())
+# =========
+# Composition Root
+# =========
 
+class Container:
+    """
+    Application composition root.
 
-def build_pay_order_use_case():
-    return PayOrderUseCase(build_order_repository())
+    - Wires dependencies
+    - Defines transaction boundaries
+    - Keeps infrastructure isolated
+    """
 
+    def __init__(self, *, session_factory: Callable):
+        self._session_factory = session_factory
 
-def build_ship_order_use_case():
-    return ShipOrderUseCase(build_order_repository())
+    def _uow(self) -> UnitOfWork:
+        return UnitOfWork(self._session_factory)
 
+    def create_order(self) -> CreateOrder:
+        return CreateOrder(self._uow())
 
-def build_cancel_order_use_case():
-    return CancelOrderUseCase(build_order_repository())
+    def pay_order(self) -> PayOrder:
+        return PayOrder(self._uow())
 
+    def ship_order(self) -> ShipOrder:
+        return ShipOrder(self._uow())
 
-def build_get_order_use_case():
-    return GetOrderUseCase(build_order_repository())
+    def cancel_order(self) -> CancelOrder:
+        return CancelOrder(self._uow())
