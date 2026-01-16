@@ -1,9 +1,15 @@
 from typing import Sequence
 
 from domain.order import Order, OrderItem, OrderId
-from application.ports.order_repository import OrderRepository
-from application.errors import OrderNotFound
 
+from application.errors import OrderNotFound
+from application.read_models import OrderView
+from application.ports.order_read_repository import OrderReadRepository
+from application.ports.order_repository import OrderRepository
+
+# =========
+# Read-side use cases (CQRS)
+# =========
 
 class _BaseOrderUseCase:
     """
@@ -61,4 +67,26 @@ class CancelOrder(_BaseOrderUseCase):
         order.cancel()
         self._repository.save(order)
         return order
+
+from application.ports.order_read_repository import OrderReadRepository
+from domain.order import OrderId
+from application.read_models import OrderView
+
+
+class GetOrder:
+    """
+    Read-only use case for retrieving an Order view.
+
+    This use case:
+    - does NOT load domain aggregates
+    - does NOT enforce business invariants
+    - depends only on the read side (CQRS)
+    """
+
+    def __init__(self, repository: OrderReadRepository):
+        self._repository = repository
+
+    def __call__(self, *, order_id: OrderId) -> OrderView | None:
+        return self._repository.get_by_id(order_id)
+
 
