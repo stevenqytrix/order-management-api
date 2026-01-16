@@ -54,6 +54,15 @@ The codebase follows Clean Architecture principles:
 
 Dependency direction is strictly enforced:
 
+## CQRS (Light)
+
+This project applies a **CQRS light** approach:
+
+- **Write side** enforces business invariants via domain aggregates and Unit of Work
+- **Read side** exposes optimized, read-only projections via dedicated read models
+
+Commands and queries are intentionally separated to improve clarity,
+maintainability, and scalability without introducing unnecessary complexity.
 
 ---
 
